@@ -22,7 +22,8 @@ Most churn notebooks stop at "AUC = 0.85." A model only creates value when someo
 ```
 raw CSV ─► validation ─► feature engineering ─► model comparison (CV)
        ─► probability calibration ─► profit-based threshold ─► test-set evaluation
-       ─► saved artifact ─► FastAPI service ─► Docker ─► CI tests on every push
+       ─► tracked in MLflow ─► FastAPI service ─► Docker ─► CI tests on every push
+       ─► monthly drift + performance monitoring ─► retrain only when the rules say so
 ```
 
 ## 1. Data
@@ -91,9 +92,37 @@ curl -X POST localhost:8000/predict -H "Content-Type: application/json" -d '{
 
 Inputs are validated with Pydantic: an invalid contract type or a negative tenure returns `422`, not a silent bad prediction.
 
-## 7. Engineering practices
-- **Tests** (`pytest`, 12 tests): data cleaning, schema validation, feature logic, unseen categories, profit math, and API contract tests, including a sanity check that a loyal two-year customer scores lower than a brand-new month-to-month one
-- **CI** (GitHub Actions): lint → train → test on every push
+## 7. After launch: keeping the model honest
+
+Training the model was the easy part. Once it's live, nothing announces that it has stopped working. Customers change, prices change, and the relationship the model learned can quietly stop being true. So every new month of scored customers goes through three checks, in the order the information actually becomes available:
+
+1. **Have the inputs shifted?** This is visible the same day. Each feature's distribution is compared with the training data using the Population Stability Index.
+2. **Has the score distribution shifted?** Also visible the same day.
+3. **Is the model still right?** This is only visible about a month later, once we know who actually churned. It checks both ranking quality (PR-AUC) and calibration, meaning whether "30% risk" still means 30%. Calibration matters here because the offer threshold is a dollar calculation built directly on those probabilities.
+
+The response policy is written down before anything goes wrong:
+- **Drift alone triggers an investigation, not a retrain.** A changed customer mix isn't proof the model is wrong.
+- **A retrain needs measured damage:** PR-AUC down more than 5 points, or predicted and actual churn rates more than 5 points apart.
+
+To test the policy, I simulated six months of traffic, each month with a realistic change:
+
+![Monitoring](figures/monitoring.png)
+
+| Month | What happened | Monitor said | Why that's the right call |
+|---|---|---|---|
+| M1–M2 | Business as usual | OK | No false alarms on normal noise |
+| M3 | A promotion brings in many more month-to-month customers | INVESTIGATE | Inputs shifted a lot, but performance and calibration held. The model already knew how to score these customers, so retraining would have been wasted effort. |
+| M4 | Fiber prices rise 15%, and fiber customers start leaving more than before | **RETRAIN** | The model predicted 28.8% churn but 34.5% happened. **PR-AUC actually went up**, so a dashboard watching only accuracy would have missed it. Every offer decision was being made on probabilities that were now too low. |
+| M5 | A new payment method the model has never seen | INVESTIGATE | A huge input shift, but the model ignores unseen categories safely, so performance held. The right fix is a product conversation about how to encode the new method, not a blind retrain. |
+| M6 | Back to normal | OK | |
+
+Full numbers: [`reports/monitoring_report.md`](reports/monitoring_report.md).
+
+**Experiment tracking.** Every training run is logged to MLflow with its parameters, metrics, business assumptions, a fingerprint of the exact training data, and the model file. Months later, "which model is live, what was it trained on, and why did we choose it?" has a recorded answer. You can browse the runs with `make mlflow-ui`.
+
+## 8. Engineering practices
+- **Tests** (`pytest`, 18 tests): data cleaning, schema validation, feature logic, unseen categories, profit math, and API contract tests, a sanity check that a loyal two-year customer scores lower than a brand-new month-to-month one, and drift-policy tests
+- **CI** (GitHub Actions): lint → train → monitoring simulation → test on every push
 - **Docker:** the image trains the model at build time, so the artifact always matches the installed library versions
 - **Reproducibility:** fixed random seeds, pinned dependencies, and the metrics and metadata saved with every model (`models/metrics.json`)
 
@@ -104,6 +133,9 @@ src/churn/
   data.py        # load, clean, validate, split
   features.py    # feature engineering transformer + preprocessing pipeline
   train.py       # compare, calibrate, threshold, evaluate, save
+  tracking.py    # MLflow experiment tracking
+  monitoring.py  # drift (PSI), performance and calibration checks, retrain policy
+  simulate_production.py  # six simulated months after launch
   predict.py     # load artifact and score
   api.py         # FastAPI service
 tests/           # unit + API tests
@@ -114,12 +146,13 @@ Dockerfile, Makefile, .github/workflows/ci.yml
 ```bash
 make install
 make train      # ~15 seconds; writes models/ and figures/
+make monitor    # run the 6-month monitoring simulation
 make test
 make serve
 # or: make docker
 ```
 
 ## Next steps for a real deployment
-- Monitor input drift (for example the share of month-to-month customers) and the live churn rate against predictions
+- Log every API prediction so the monitor runs on real traffic instead of a simulation
 - Run an A/B test of the retention offer itself to measure the real success rate in place of the 30% assumption
 - Uplift modeling: target customers who are *persuadable*, not just likely to churn

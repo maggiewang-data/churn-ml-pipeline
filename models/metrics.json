@@ -1,6 +1,6 @@
 {
   "model": "xgboost",
-  "trained_at": "2026-11-08T21:38:21+00:00",
+  "trained_at": "2026-11-08T22:43:15+00:00",
   "sklearn_version": "1.9.1",
   "n_train": 5634,
   "n_test": 1409,
@@ -35,5 +35,6 @@
     "offer_cost": 40.0,
     "offer_success_rate": 0.3,
     "months_of_value_saved": 12
-  }
+  },
+  "data_hash": "c33f60bd954e"
 }

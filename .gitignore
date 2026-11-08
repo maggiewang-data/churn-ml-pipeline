@@ -4,3 +4,5 @@ __pycache__/
 .ruff_cache/
 .venv/
 models/*.joblib
+mlflow.db
+mlruns/

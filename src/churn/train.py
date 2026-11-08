@@ -48,6 +48,8 @@ from .config import (
 )
 from .data import load_dataset, split
 from .features import build_preprocessor
+from .monitoring import REFERENCE_PATH, build_reference_profile, save_reference_profile
+from .tracking import data_fingerprint, log_training_run
 
 
 def candidate_models() -> dict[str, object]:
@@ -145,8 +147,17 @@ def main() -> None:
             "months_of_value_saved": MONTHS_OF_VALUE_SAVED,
         },
     }
+    data_hash = data_fingerprint(df)
+    metrics["data_hash"] = data_hash
     joblib.dump({"model": final, "threshold": threshold, "metadata": metrics}, MODEL_PATH)
     METRICS_PATH.write_text(json.dumps(metrics, indent=2))
+
+    # Snapshot of the training population: the baseline every future batch is compared to
+    save_reference_profile(build_reference_profile(
+        X_train, final.predict_proba(X_train)[:, 1], metrics["test"]["pr_auc"]))
+    run_id = log_training_run(metrics, data_hash, MODEL_PATH, [METRICS_PATH, REFERENCE_PATH])
+    if run_id:
+        print(f"Logged MLflow run {run_id}")
     print(json.dumps(metrics["test"], indent=2))
 
     # ---- Figures ---------------------------------------------------------- #

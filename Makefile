@@ -1,10 +1,16 @@
-.PHONY: install train test serve docker lint
+.PHONY: install train monitor mlflow-ui test serve docker lint
 
 install:
 	pip install -r requirements-dev.txt
 
 train:
 	cd src && python -m churn.train
+
+monitor:
+	cd src && python -m churn.simulate_production
+
+mlflow-ui:
+	mlflow ui --backend-store-uri sqlite:///mlflow.db
 
 test:
 	pytest -q
