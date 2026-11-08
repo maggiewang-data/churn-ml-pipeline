@@ -1,0 +1,9 @@
+pandas>=2.0
+numpy
+scikit-learn>=1.4
+xgboost>=2.0
+matplotlib
+joblib
+fastapi>=0.110
+uvicorn[standard]
+pydantic>=2

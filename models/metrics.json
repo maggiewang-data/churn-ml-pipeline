@@ -1,0 +1,39 @@
+{
+  "model": "xgboost",
+  "trained_at": "2026-11-08T21:38:21+00:00",
+  "sklearn_version": "1.9.1",
+  "n_train": 5634,
+  "n_test": 1409,
+  "test_churn_rate": 0.2654364797728886,
+  "cv_comparison": {
+    "logistic_regression": {
+      "pr_auc_mean": 0.6618275677404826,
+      "pr_auc_std": 0.016024959959138788
+    },
+    "random_forest": {
+      "pr_auc_mean": 0.6621586440217122,
+      "pr_auc_std": 0.02157915625688173
+    },
+    "xgboost": {
+      "pr_auc_mean": 0.6646113825285122,
+      "pr_auc_std": 0.01864784507404438
+    }
+  },
+  "threshold": 0.16,
+  "test": {
+    "roc_auc": 0.8459363455527138,
+    "pr_auc": 0.6606882954838,
+    "brier": 0.13498292294204872,
+    "precision_at_threshold": 0.4540540540540541,
+    "recall_at_threshold": 0.8983957219251337,
+    "share_flagged": 0.525195173882186,
+    "expected_profit_usd": 60328.71999999999,
+    "profit_if_offer_to_everyone_usd": 41613.63999999999,
+    "profit_rule_month_to_month_usd": 53025.7
+  },
+  "business_assumptions": {
+    "offer_cost": 40.0,
+    "offer_success_rate": 0.3,
+    "months_of_value_saved": 12
+  }
+}
